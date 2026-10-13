@@ -13,7 +13,32 @@ python3 -m http.server 8000
 # then visit http://localhost:8000
 ```
 
-The page loads two Google Fonts over the network; everything else (code, star data, dust map) is inside `index.html`.
+The page loads two Google Fonts over the network; everything else (code, star data, dust map) ships in this folder.
+
+The live version is deployed to GitHub Pages from `main` by `.github/workflows/pages.yml`.
+
+## Layout
+
+The scripts are plain (non-module) scripts loaded in order by `index.html`, so the page still works straight from `file://`. They share top-level names, so load order matters only for code that runs immediately; everything kicks off from `js/main.js`.
+
+| Path | Contents |
+| --- | --- |
+| `index.html` | Page markup and script order |
+| `css/style.css` | All styling |
+| `js/params.js` | Controls, presets, saved settings, formatters |
+| `js/gl.js` | WebGL2 context, shader compilation, textures and framebuffers |
+| `js/shaders/` | GLSL sources: `common`, `sky`, `passes` (sky/environment), `stars`, `composite` (sea, land, camera) |
+| `js/astronomy.js` | Sidereal time, observer frame, aiming at the galactic centre |
+| `js/colour.js` | Black-body colours and white balance |
+| `js/stars.js` | Synthetic star field plus catalogue stars and clusters |
+| `js/planets.js` | Planet positions and magnitudes |
+| `js/galaxy-map.js` | Isophote fill, catalogue dust and the SFD dust texture |
+| `js/render.js` | Uniforms, tiled preview and export rendering, scheduling |
+| `js/ui.js` | Control panel, readout, resizing |
+| `js/main.js` | Start-up |
+| `js/data/` | Embedded catalogues: stars and clusters, nebulae, Milky Way isophotes, dust map PNG |
+
+The dust map stays a base64 data URI rather than a `.png` file because the page reads its pixels back, which browsers block for images loaded from `file://`.
 
 ## Using it
 
