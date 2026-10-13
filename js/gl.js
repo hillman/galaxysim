@@ -5,6 +5,7 @@ const msgEl = document.getElementById("msg");
 const gl = canvas.getContext("webgl2",{antialias:false,alpha:false,premultipliedAlpha:false,preserveDrawingBuffer:false,powerPreference:"high-performance"});
 function fail(t){ msgEl.textContent=t; msgEl.hidden=false; }
 let ok = !!gl;
+let ready=false;
 if (!gl) fail("This browser doesn't offer WebGL2, which the renderer needs.");
 else if (!gl.getExtension("EXT_color_buffer_float")) { ok=false; fail("This GPU can't render to floating-point buffers (EXT_color_buffer_float), which the renderer needs."); }
 
@@ -51,13 +52,19 @@ function makeTex(w,h,internal,format,type,mip){
 }
 function makeFB(t){ const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); return f; }
 
-function initGL(){
+async function initGL(){
+  await startupStatus("Compiling sky and camera shaders…",15);
   progSky=program(VS_QUAD,FS_SKY);
   progEnv=program(VS_QUAD,FS_ENV);
   progStars=program(VS_STARS,FS_STARS,["aEq","aMag","aCol"]);
   progComp=program(VS_QUAD,FS_COMP);
+  progTrees=program(VS_TREES,FS_TREES,["aStart","aEnd","aShape"]);
   maxPt=gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]||64;
-  buildDustMap(); loadDustHP();
+  await startupStatus("Building the Milky Way and nebula catalogues…",35);
+  buildDustMap();
+  await startupStatus("Reading the measured dust map…",55);
+  await loadDustHP();
+  await startupStatus("Preparing render buffers…",70);
   skyTex=makeTex(TEX,TEX,gl.RGBA16F,gl.RGBA,gl.HALF_FLOAT); skyFB=makeFB(skyTex);
   starTex=makeTex(TEX,TEX,gl.RGBA16F,gl.RGBA,gl.HALF_FLOAT); starFB=makeFB(starTex);
   envTex=makeTex(ENVW,ENVH,gl.RGBA16F,null,null,true); envFB=makeFB(envTex);

@@ -95,6 +95,34 @@ vec3 pebbles(vec2 q,float fp,vec3 d,float wet,vec3 skyAvg){
 }
 float gauss(ivec2 p,int s){ return (hash2(p+ivec2(s,0))+hash2(p+ivec2(0,s))+hash2(p+ivec2(s,s))+hash2(p-ivec2(s,0))-2.)*1.73; }
 vec3 aces(vec3 x){ return clamp(x*(2.51*x+0.03)/(x*(2.43*x+0.59)+0.14),0.,1.); }
+vec3 dryLandscape(vec3 direction,float azimuth,float altitude,float pixelAngle,vec3 sky,vec3 skyAverage,vec3 horizon,out float groundCoverage){
+  vec3 colour=sky;
+  groundCoverage=0.;
+  for(int layer=0;layer<3;layer++){
+    float depth=float(layer);
+    float ridge=terrainRidge(azimuth,depth,pixelAngle);
+    float coverage=clamp((ridge-altitude)/pixelAngle+0.5,0.,1.);
+    groundCoverage=max(groundCoverage,coverage);
+    vec2 mountain=vec2(azimuth,altitude)*vec2(190.,260.);
+    float crag=fbm2f(mountain+depth*43.+uLandB.z,pixelAngle*260.);
+    vec3 rock=skyAverage*vec3(0.045,0.052,0.065)*(0.45+crag);
+    float ravine=fbm2f(vec2(azimuth*380.,altitude*40.)+crag*2.+depth*43.+uLandB.z,pixelAngle*380.);
+    rock*=0.7+ravine*0.6;
+    rock+=horizon*0.035*(1.-depth*0.3);
+    colour=mix(colour,rock,coverage);
+  }
+  if(altitude<0.){
+    groundCoverage=1.;
+    float distance=uCamH/max(-direction.y,0.0001);
+    vec2 ground=direction.xz*distance;
+    float footprint=distance*pixelAngle/max(-direction.y,0.04);
+    float grass=fbm2f(ground*vec2(1.4,0.6)+uLandB.z,footprint*1.4);
+    float patches=fbm2f(ground*0.035+uLandB.z,footprint*0.035);
+    vec3 soil=skyAverage*vec3(0.038,0.05,0.025)*(0.3+grass*0.7+patches*0.8);
+    colour=mix(soil,colour,smoothstep(-0.09,0.,altitude));
+  }
+  return colour;
+}
 void main(){
   vec2 gp=gl_FragCoord.xy+uFragOffset;
   ivec2 tp=ivec2(gp-uTileOrigin+uMargin);
@@ -105,6 +133,7 @@ void main(){
   vec3 sky=texelFetch(uSky,tp,0).rgb+texelFetch(uStars,tp,0).rgb;
   float tw=d.y<0.?uCamH/-d.y:1e9;
   vec3 col;
+  float blackWeight=1.;
   float rt=rockTop(azm);
   float rockDist=uCamH/tan(max(-uRockBase,1e-5));
   vec3 horizon=textureLod(uEnv,envUV(azm,0.004),3.).rgb;
@@ -121,7 +150,13 @@ void main(){
   float ldist=uLandA.w/(1.+lrel*3.);
   bool landPix=alt<lt && tSurf>ldist;
   bool rockPix=rt>0. && alt<uRockBase+rt && tSurf>rockDist;
-  if(landPix){
+  if(uLandscape==1){
+    float groundCoverage;
+    col=dryLandscape(d,azm,alt,pa,sky,skyAvg,horizon,groundCoverage);
+    float treeCoverage=texelFetch(uStars,tp,0).a;
+    col=mix(col,skyAvg*vec3(0.009,0.007,0.005),treeCoverage);
+    blackWeight=1.-max(groundCoverage,treeCoverage);
+  } else if(landPix){
     float edge=(lt-alt)/pa;
     vec2 lq=vec2(azm,alt)*ldist;
     float tex=fbm2f(lq*0.7,pa*ldist*0.7);
@@ -170,7 +205,7 @@ void main(){
   }
   /* camera */
   col*=uExpo*uWB;
-  col=max(col-uBlack*uExpo*uWB*vec3(0.10,0.11,0.13),0.);
+  col=max(col-uBlack*blackWeight*uExpo*uWB*vec3(0.10,0.11,0.13),0.);
   float L=dot(col,vec3(.2126,.7152,.0722));
   col=max(mix(vec3(L),col,uSat),0.);
   col*=mix(1.,cz*cz*cz*cz,uVig);

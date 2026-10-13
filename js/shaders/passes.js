@@ -33,9 +33,11 @@ void main(){
   vec3 d=vec3(sin(azm)*cos(alt),sin(alt),cos(azm)*cos(alt));
   vec4 s=skyRad(d,30,0.5,2.*PI/uEnvSize.x,1.);
   vec3 c=s.rgb+0.10*extinct(airmass(alt));
-  float rt=rockTop(azm);
-  if(rt>0. && alt<uRockBase+rt) c=vec3(0.012,0.015,0.022);
-  float ht=hillsTop(azm); if(alt<ht) c=mix(c,s.rgb*0.55,0.6);
-  if(alt<landTop(azm)) c=vec3(0.008,0.01,0.014);
+  if(uLandscape==0){
+    float rt=rockTop(azm);
+    if(rt>0. && alt<uRockBase+rt) c=vec3(0.012,0.015,0.022);
+    float ht=hillsTop(azm); if(alt<ht) c=mix(c,s.rgb*0.55,0.6);
+    if(alt<landTop(azm)) c=vec3(0.008,0.01,0.014);
+  }
   o=vec4(c,1.);
 }`;

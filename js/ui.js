@@ -22,6 +22,14 @@ function buildUI(){
     det.innerHTML=`<summary>${gr.name}</summary>`;
     const box=document.createElement("div"); box.className="ctrls";
     gr.ctrls.forEach(([id,label,mn,mx,st,fmt])=>{
+      if(id==="__landscape"||id==="__tree"){
+        const field=id==="__landscape"?"landscape":"treeType";
+        const choices=field==="landscape"?[["coast","Sea & coast"],["land","Land"]]:[["bare","Bare tree"],["oak","Leafy oak"],["pine","Pine"]];
+        const row=document.createElement("div"); row.className="aimrow"; row.dataset.landOnly=String(field==="treeType");
+        row.innerHTML=`<div class="seg" role="group" aria-label="${field==="landscape"?"Landscape mode":"Tree species"}">${choices.map(([value,title])=>`<button data-field="${field}" data-choice="${value}">${title}</button>`).join("")}</div>`;
+        row.querySelectorAll("button").forEach(button=>button.addEventListener("click",()=>{ P[field]=button.dataset.choice; markPreset(null); changed("full"); }));
+        box.appendChild(row); return;
+      }
       if(id==="__toggles"){
         const row=document.createElement("div"); row.className="aimrow";
         row.innerHTML=`<span class="aimlabel">Real stars</span><div class="seg" role="group" aria-label="Real stars"><button data-tg="realStars" data-v="1">On</button><button data-tg="realStars" data-v="0">Off</button></div>
@@ -56,8 +64,8 @@ function buildUI(){
       inp.addEventListener("change",()=>changed("full"));
       inputs[id]={inp,out,fmt};
       if(id==="seed"||id==="landSeed"){
-        const b=document.createElement("button"); b.className="btn ghost"; b.textContent=id==="seed"?"New sky":"New coastline"; b.style.justifySelf="start"; b.style.gridColumn="1/-1"; b.style.padding="5px 10px";
-        b.addEventListener("click",()=>{ P[id]=1+Math.floor(Math.random()*9999); syncUI(); changed("full"); });
+        const b=document.createElement("button"); b.className="btn ghost"; b.textContent=id==="seed"?"New sky":"New landscape"; b.style.justifySelf="start"; b.style.gridColumn="1/-1"; b.style.padding="5px 10px";
+        b.addEventListener("click",()=>{ P[id]=1+Math.floor(Math.random()*9999); markPreset(null); syncUI(); changed("full"); });
         row.appendChild(b);
       }
       if(id==="time"){ const h=document.createElement("p"); h.className="hint"; h.textContent="Local mean solar time, no daylight saving."; row.appendChild(h); }
@@ -65,6 +73,9 @@ function buildUI(){
     det.appendChild(box); host.appendChild(det);
   });
   const pre=document.getElementById("presets");
+  const randomButton=document.createElement("button"); randomButton.className="btn ghost"; randomButton.id="randomScene"; randomButton.textContent="Random scene";
+  randomButton.title="A balanced composition with variations in sky, colour and landscape";
+  randomButton.addEventListener("click",()=>{ P=randomScene(); syncUI(); fit(); markPreset(null); changed("full"); }); pre.appendChild(randomButton);
   Object.keys(PRESETS).forEach(n=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=n; b.dataset.p=n;
     b.addEventListener("click",()=>{ P=Object.assign({},BASE,{aspect:P.aspect},PRESETS[n]); syncUI(); fit(); markPreset(n); changed("full"); }); pre.appendChild(b); });
   const asp=document.getElementById("aspect");
@@ -77,8 +88,12 @@ function buildUI(){
     navigator.clipboard.writeText(ta.value).then(()=>note.textContent="Copied",()=>{ ta.select(); note.textContent="Selected, press copy"; });
   });
   document.getElementById("applyJson").addEventListener("click",()=>{
-    try{ const s=JSON.parse(ta.value); P=Object.assign({},DEFAULTS,s); syncUI(); fit(); changed("full"); note.textContent="Applied"; }
+    try{ const s=JSON.parse(ta.value); P=Object.assign({},BASE,s); syncUI(); fit(); markPreset(null); changed("full"); note.textContent="Applied"; }
     catch(e){ note.textContent="That isn't valid JSON: "+e.message; }
+  });
+  document.getElementById("restoreJson").addEventListener("click",()=>{
+    try{ const saved=localStorage.getItem("mwseascape.v2"); if(!saved){ note.textContent="No saved scene yet"; return; } ta.value=saved; document.getElementById("applyJson").click(); }
+    catch(error){ note.textContent="Saved settings are unavailable"; }
   });
 }
 function markPreset(n){ document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.p===n)); }
@@ -89,6 +104,10 @@ function syncUI(){
   document.querySelectorAll("[data-proj]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.proj===P.proj)));
   document.querySelectorAll("[data-tg]").forEach(b=>b.setAttribute("aria-pressed",String((b.dataset.v==="1")===!!P[b.dataset.tg])));
   document.querySelectorAll("[data-side]").forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.side===P.coreSide)));
+  document.querySelectorAll("[data-choice]").forEach(button=>button.setAttribute("aria-pressed",String(P[button.dataset.field]===button.dataset.choice)));
+  document.querySelectorAll('[data-land-only="true"]').forEach(row=>row.hidden=P.landscape!=="land");
+  ["relief","treeHeight","treeDist","treeOff"].forEach(id=>inputs[id].inp.parentElement.hidden=P.landscape!=="land");
+  ["headland","hills","sea","swellLen","swellDir","silk","surf","beach","pebble","rockSize","rockOff","rockDist"].forEach(id=>inputs[id].inp.parentElement.hidden=P.landscape==="land");
   ["time","heading"].forEach(id=>inputs[id]&&inputs[id].inp.parentElement.classList.toggle("derived",!!P.aimCore));
   ["coreAlt","coreOff"].forEach(id=>inputs[id]&&inputs[id].inp.parentElement.classList.toggle("derived",!P.aimCore));
   document.getElementById("json").value=JSON.stringify(P,null,1);

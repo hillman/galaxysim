@@ -5,6 +5,7 @@ uniform mat3 uGalFromLocal;
 uniform float uStarDust,uFront,uRiftGlow,uRed,uTintVar;
 uniform float uReal,uMWC,uIsoK,uIsoG,uCatK,uDustS,uCoreK,uBulgeDust,uDustThr,uCoreMix,uBulgeN,uFil,uKnot,uSCK,uLane,uLaneSharp;
 uniform float uSkyGlow,uGlowWarm;
+uniform float uStructure,uEdgeColour,uCloudTone;
 uniform float uMW,uDust,uDustScale,uNeb,uAirglow,uAgHue,uLP,uLpAz,uLpWarm;
 /* octave-limited noise: stops adding octaves once they'd be smaller than a pixel at this distance */
 float octs(float f0,float tm,float pixA){ return clamp(log(1./(f0*tm*pixA*1.5))/log(2.07)+1.,1.,9.); }
@@ -71,6 +72,22 @@ vec4 galaxy(vec3 g,float jit,int steps,float pixA){
   return vec4(L,dot(L,vec3(.3,.55,.15))/max(Lnd,1e-6));
 }
 float fbmN(vec3 p,float n){ float a=.5,s=0.,w=0.; for(int i=0;i<4;i++){ float k=clamp(n-float(i),0.,1.); if(k<=0.) break; s+=a*k*vnoise3(p); w+=a*k; p=p*2.03+vec3(1.3,7.1,4.7); a*=.5; } return s/max(w,1e-4); }
+vec3 cloudStructure(vec3 direction,float pixelAngle){
+  vec3 position=direction*78.+uSeedOff.zxy;
+  vec3 warp=vec3(vnoise3(position*0.31),vnoise3(position*0.31+17.),vnoise3(position*0.31+43.))-0.5;
+  position+=warp*3.2;
+  float cloud=fbmL(position,clamp(log2(1./max(pixelAngle*78.*1.5,1e-5))+1.,1.,8.));
+  float filament=0.,weight=0.,amplitude=0.5,frequency=180.;
+  vec3 thread=direction*frequency+warp*5.+uSeedOff;
+  for(int octave=0;octave<6;octave++){
+    float resolved=1.-smoothstep(0.3,0.9,frequency*pixelAngle);
+    float density=vnoise3(thread);
+    filament+=amplitude*resolved*(density-0.5);
+    weight+=amplitude; amplitude*=0.58; frequency*=2.03;
+    thread=thread*2.03+vec3(7.1,3.7,19.3);
+  }
+  return vec3((cloud-0.5)*2.8,filament/max(weight,0.001),vnoise3(direction*19.+uSeedOff.yxz));
+}
 /* ---- real-sky landmarks, in galactic (l, b) degrees ---- */
 const int NKN=24;
 /* M8 Lagoon; M8 core/Hourglass; M20 Trifid; M20 reflection; M17 Omega; M16 Eagle; NGC6559; Sh2-30/31 near M8; NGC6357; NGC6334; IC4604 rho Oph; IC4606 Antares; IC4592 Blue Horse; Sh2-9 sigma Sco; NGC6188; Eta Carinae; IC2944; M42 Orion; NGC7000; IC1396; Rosette; California; IC5070 Pelican; Gamma Cyg Sadr */
@@ -176,6 +193,15 @@ float realSky(vec3 g,float pixDeg,out float boost,out vec3 neb,out vec4 info,out
   if(abs(lb.y)<39.9){
     vec2 dh=texture(uDustHP,vec2((lb.x+180.)/360.,(40.-lb.y)/80.)).rg;
     float hp0=dh.r*2.2-0.8;
+    if(uStructure>0.){
+      vec2 dustUV=vec2((lb.x+180.)/360.,(40.-lb.y)/80.);
+      float filtered=dh.r*0.4;
+      filtered+=0.2*texture(uDustHP,dustUV+vec2(0.,0.16/80.)).r;
+      filtered+=0.2*texture(uDustHP,dustUV-vec2(0.,0.16/80.)).r;
+      filtered+=0.1*texture(uDustHP,dustUV+vec2(0.18/360.,0.)).r;
+      filtered+=0.1*texture(uDustHP,dustUV-vec2(0.18/360.,0.)).r;
+      hp0=(filtered*2.2-0.8)*0.6;
+    }
     /* lane contrast: gain on the measured fine dust for the band's outer light, with denser lanes sharpened a little.
        The bulge keeps the plain measured value, so the core is not spotted */
     float hp=uLane*hp0*(1.+uLaneSharp*max(hp0,0.)); hpo=hp;
@@ -187,8 +213,14 @@ float realSky(vec3 g,float pixDeg,out float boost,out vec3 neb,out vec4 info,out
     vec2 wl=lb+(vec2(vnoise2(lb*0.32+uSeedOff.zy+3.),vnoise2(lb*0.32+uSeedOff.xz+21.))-0.5)*vec2(1.6,1.2+3.2*near)
               +(vec2(vnoise2(lb*0.9+uSeedOff.yx+8.),vnoise2(lb*0.9+uSeedOff.zx+2.))-0.5)*vec2(0.9,0.8+1.6*near)
               +(vec2(vnoise2(lb*2.6+uSeedOff.yx),vnoise2(lb*2.6+uSeedOff.zx+13.))-0.5)*vec2(0.4,0.3+0.7*near);
+    if(uStructure>0.) wl=mix(lb,wl,0.2);
     float gW=texture(uDustHP,vec2((wl.x+180.)/360.,clamp((40.-wl.y)/80.,0.,1.))).g;
-    lnEf=gW>0.?gW*9.3-4.+hp0:-4.;
+    if(uStructure>0.){
+      vec2 columnUV=vec2((wl.x+180.)/360.,clamp((40.-wl.y)/80.,0.,1.));
+      gW=gW*0.4+0.15*(texture(uDustHP,columnUV+vec2(0.,0.45/80.)).g+texture(uDustHP,columnUV-vec2(0.,0.45/80.)).g
+        +texture(uDustHP,columnUV+vec2(0.45/360.,0.)).g+texture(uDustHP,columnUV-vec2(0.45/360.,0.)).g);
+    }
+    lnEf=gW>0.?gW*9.3-4.+hp0*(uStructure>0.?0.25:1.):-4.;
     tau+=uCatK*1.75*hp;
     /* large-scale dust column: thick dust (the Great Rift along the plane) darkens the band;
        moderate dust also mottles the Ophiuchus side. The bulge term below keeps the Sagittarius cloud bright */
@@ -218,6 +250,13 @@ vec4 skyRad(vec3 d,int steps,float jit,float pixA,float gran){
   if(uReal>0.){
     float bo; vec3 nb; vec4 info; float lnEf=-4., clump=0.5, fil=0., hpo=0.;
     float tau=realSky(gd,pixA*57.29578,bo,nb,info,lnEf,clump,fil,hpo);
+    vec3 structure=vec3(0.);
+    if(uStructure>0.||uEdgeColour>0.) structure=cloudStructure(gd,pixA);
+    float dustPresence=smoothstep(-2.,0.4,lnEf);
+    if(uStructure>0.){
+      float detail=structure.x*0.55+structure.y*0.8;
+      tau+=uStructure*uDust*detail*dustPresence;
+    }
     float B=info.x, fd=info.y, bw=info.z, ab=info.w;
     tau=max(tau,-0.55);
     /* dust reddens what it lets through: brown-red lane edges, bluer windows */
@@ -241,6 +280,7 @@ vec4 skyRad(vec3 d,int steps,float jit,float pixA,float gran){
     float cz=exp(-pow((lbc.x-3.)/17.,4.)-pow(lbc.y/12.,4.));
     S*=1.-uCoreMix*cz*mix(0.75,1.,clump);
     vec3 Rl=tint*S*mott*(uFront*vec3(1.08,0.94,0.9)+(1.-uFront)*tr)*(1.+0.15*bo);
+    if(uStructure>0.) Rl*=exp(uStructure*(structure.x*0.34-structure.y*0.3));
     /* central bulge: smooth old-star light around the galactic centre (slightly boxy, brighter on the near side of the bar),
        seen through the measured dust column, so only the low-dust windows (Sagittarius cloud, Baade's window) shine */
     if(uCoreK>0.){
@@ -254,13 +294,16 @@ vec4 skyRad(vec3 d,int steps,float jit,float pixA,float gran){
       float bulc=exp(-2.*rb), disk=0.32*exp(-abs(gw.x)/20.)*exp(-sqrt(gw.y*gw.y+0.3)/2.4);
       /* thin dark filaments across the bright core: ridges of a lightly warped noise field, soft-edged, where dust is moderate */
       vec3 fq=gd*115.+uSeedOff*1.9;
+      fq+=gd*vec3(-35.,-35.,100.)*min(uStructure,1.);
       fq+=(vec3(vnoise3(fq*0.33+5.),vnoise3(fq*0.33+19.),vnoise3(fq*0.33+41.))-0.5)*3.2;
       float fl=0.,fa=.5,fw=0.; float nf=clamp(log2(1./(3.3*pixA*57.29578*1.5))+1.,0.,6.);
-      for(int i=0;i<3;i++){ float k=clamp(nf-float(i),0.,1.); if(k<=0.) break; float v=1.-abs(2.*vnoise3(fq)-1.); fl+=fa*k*pow(v,6.); fw+=fa*k; fq=fq*2.1+vec3(1.7,3.9,8.2); fa*=.4; }
+      for(int i=0;i<3;i++){ float k=clamp(nf-float(i),0.,1.); if(k<=0.) break; float density=vnoise3(fq); float v=1.-abs(2.*density-1.); fl+=fa*k*mix(pow(v,6.),smoothstep(0.42,0.8,density),min(uStructure,1.)); fw+=fa*k; fq=fq*2.1+vec3(1.7,3.9,8.2); fa*=.4; }
       fl=fw>0.?fl/fw:0.;
       float fmod=smoothstep(-1.6,-0.4,lnEf)*(1.-smoothstep(0.6,1.6,lnEf));
       float Ef=exp(lnEf)*mix(0.6,1.25,clump)*(1.+uFil*3.*fl*fmod);
+      if(uStructure>0.) Ef=exp(lnEf);
       vec3 Tb=exp(-uBulgeDust*Ef*2.86*kRed);
+      if(uStructure>0.) Tb*=exp(-uFil*0.5*fl*fmod*kRed);
       /* disk star clouds (M24, M8, M23...) lie in front of most plane dust: capped extinction, so they show as knots */
       vec3 Td=Tb;
       Rl+=uCoreK*vec3(1.32,0.95,0.86)*(bulc*Tb+disk*Td)*mix(1.,mott,0.6);
@@ -299,6 +342,21 @@ vec4 skyRad(vec3 d,int steps,float jit,float pixA,float gran){
     vec3 gd2=gd*40.+uSeedOff;
     float ha=exp(-ab/4.5)*(0.25+1.1*smoothstep(0.4,0.85,vnoise3(gd2)*0.6+vnoise3(gd2*3.1)*0.4))*(1.+1.6*smoothstep(0.15,1.,tau));
     Rl+=uNeb*(0.09*ha*S*vec3(1.,0.3,0.68)*(0.4+0.6*tr.r)+0.55*nb*tr.g*(0.25+0.75*S));
+    if(uEdgeColour>0.){
+      float transition=exp(-pow((lnEf+0.35)/1.5,2.))*dustPresence;
+      float cloudy=smoothstep(0.08,0.8,B+bo*0.2);
+      vec3 cool=vec3(0.78,0.98,1.18);
+      vec3 warm=mix(vec3(1.48,0.9,0.65),vec3(1.38,0.72,1.16),smoothstep(0.25,0.7,structure.z));
+      vec3 cloudTint=mix(cool,warm,clamp(transition*0.75+bw*0.45,0.,1.));
+      Rl*=mix(vec3(1.),cloudTint,uEdgeColour*0.7*cloudy);
+      float edgeLight=transition*cloudy*(0.45+0.55*smoothstep(-0.5,0.6,structure.x))*exp(-max(tau,0.)*0.22);
+      Rl+=uEdgeColour*edgeLight*(0.022+S*0.1)*mix(vec3(0.8,0.62,1.08),vec3(1.45,0.6,0.81),structure.z);
+    }
+    if(abs(uCloudTone)>0.){
+      float cloudMask=smoothstep(0.08,0.8,B+bo*0.2)*(1.-bw*0.4);
+      vec3 palette=uCloudTone<0.?vec3(0.62,1.26,1.12):vec3(1.2,0.98,0.82);
+      Rl*=mix(vec3(1.),palette,abs(uCloudTone)*cloudMask);
+    }
     G.rgb=mix(G.rgb,Rl,uReal);
     /* transmission for faint background stars: they sit mostly behind the dust, so the measured column counts in full */
     /* the dimming of background stars varies cloud to cloud (ragged, never a ruled edge) */

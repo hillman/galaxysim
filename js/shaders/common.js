@@ -63,6 +63,33 @@ vec3 extinct(float X){ return exp(-X*uHaze*vec3(0.105,0.16,0.27)); }
 /* sea stacks: profile in angle space */
 uniform vec3 uRock; uniform vec3 uRockN; uniform float uRockBase;
 uniform vec4 uLandA,uLandB; uniform vec3 uLandC; uniform float uLandExt;
+uniform int uLandscape;
+uniform float uRelief;
+float terrainRidge(float azimuth,float layer,float pixelAngle){
+  vec2 circle=vec2(cos(azimuth),sin(azimuth));
+  float seed=uLandB.z+layer*71.;
+  float broad=vnoise3(vec3(circle*3.2,seed));
+  float ridge=0.,amplitude=0.5,frequency=7.;
+  for(int octave=0;octave<7;octave++){
+    float detail=1.-abs(vnoise3(vec3(circle*frequency,seed+13.))-0.5)*2.;
+    ridge+=amplitude*detail*exp(-pow(frequency*pixelAngle,2.));
+    frequency*=2.13; amplitude*=0.48;
+  }
+  float height=uRelief*(0.018+0.16*pow(broad,2.)+0.07*ridge)*(1.-layer*0.23)-layer*0.014;
+  float spacing=0.0026+layer*0.0011;
+  float cell=floor((azimuth+PI)/spacing);
+  float forest=0.;
+  for(int neighbor=-1;neighbor<=1;neighbor++){
+    float index=cell+float(neighbor);
+    float chance=hashf(index+seed*31.);
+    if(chance>uLandB.x*vnoise3(vec3(circle*37.,seed))*0.8) continue;
+    float center=(index+0.2+0.6*hashf(index+seed))*spacing-PI;
+    float width=spacing*(0.3+0.3*hashf(index*7.+seed));
+    float shape=max(0.,1.-abs(azimuth-center)/width);
+    forest=max(forest,pow(shape,0.9)*spacing*(0.45+chance*1.2));
+  }
+  return height+forest*smoothstep(0.005,0.15,uRelief);
+}
 float rockProfile(float x,float s){
   float b=1.-x*x; if(b<=0.) return -1.;
   float n=0.,fq=2.2,a=0.5;

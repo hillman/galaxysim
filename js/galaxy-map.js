@@ -40,6 +40,7 @@ function isophoteLevels(){
 const DMW=2400, DMH=1200, DMS=360/DMW;
 let dustHPTex=null;
 function loadDustHP(){
+  return new Promise((resolve,reject)=>{
   dustHPTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,dustHPTex);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RG8,1,1,0,gl.RG,gl.UNSIGNED_BYTE,new Uint8Array([93,0]));
@@ -55,9 +56,12 @@ function loadDustHP(){
       gl.bindTexture(gl.TEXTURE_2D,dustHPTex); gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
       gl.texImage2D(gl.TEXTURE_2D,0,gl.RG8,im.width,im.height,0,gl.RG,gl.UNSIGNED_BYTE,r);
       dustHPReady=true; schedule("full");
-    }catch(e){ console.error(e); }
+      resolve();
+    }catch(e){ reject(e); }
   };
+  im.onerror=()=>reject(new Error("The embedded dust map could not be decoded."));
   im.src=DUST_HP_PNG;
+  });
 }
 let dustHPReady=false;
 let dustTex=null;

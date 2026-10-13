@@ -8,13 +8,16 @@ function uniforms(W,H,steps){
   const Up=[F[1]*R[2]-F[2]*R[1],F[2]*R[0]-F[0]*R[2],F[0]*R[1]-F[1]*R[0]];
   const mmPerPx=36/Math.max(W,H);
   const seed=P.seed|0, sr=mulberry(seed*31+7);
-  const slope=0.07, camH=1.55+(P.beach>0.05?slope*P.beach:0);
+  const slope=0.07, camH=1.55+(P.landscape!=="land"&&P.beach>0.05?slope*P.beach:0);
   const rd=P.rockDist;
   const wb=wbGains(P.wb,P.tint);
   return {
     uGalFromLocal:["m3",colMajor(obs.galFromLocal)], uLocalFromEq:["m3",colMajor(obs.localFromEq)],
     uF:["3",F],uR:["3",R],uU:["3",Up],uFull:["2",[W,H]],uProj:["i",P.proj==="pano"?2:0],uFocal:["f",P.focal],uMmPerPx:["f",mmPerPx],uHead:["f",az],uPitchR:["f",pt],
     uSeedOff:["3",[sr()*90+5,sr()*90+5,sr()*90+5]], uSteps:["i",steps],
+    uStructure:["f",P.structure],uEdgeColour:["f",P.edgeColour],uCloudTone:["f",P.cloudTone],
+    uLandscape:["i",P.landscape==="land"?1:0],uRelief:["f",P.relief],
+    uTree:["3",[(P.heading+P.treeOff)*RAD,P.treeDist,P.treeHeight]],
     uMW:["f",P.mw],uReal:["f",P.real],uMWC:["f",P.mwc],uIsoK:["f",0.034*P.bandWidth],uIsoG:["f",0.85/Math.sqrt(P.bandWidth)],uCatK:["f",0.75*P.dust],uDustS:["f",0.55*P.dustCol],uCoreK:["f",3.5*P.coreGlow],uBulgeDust:["f",Math.max(P.dust,0.05)*0.5],uDustThr:["f",P.coreGlow>0.5?0.4:0.6],uCoreMix:["f",Math.min(0.95,P.coreGlow*0.24)],uBulgeN:["f",P.bulgeN],uFil:["f",P.fil],uKnot:["f",P.knots*P.neb*2.5],uSCK:["f",P.starClouds*0.22],uLane:["f",P.lane],uStarDust:["f",0.45*P.dust/2.2],uFront:["f",P.front],uRiftGlow:["f",P.riftGlow*0.012],uRed:["f",P.redden],uTintVar:["f",P.tintVar],uLaneSharp:["f",P.laneSharp],uGrainMW:["f",P.mwGrain],uDust:["f",P.dust],uDustScale:["f",P.dustScale],uNeb:["f",P.neb],
     uHaze:["f",P.haze],uAirglow:["f",P.airglow],uAgHue:["f",P.agHue],uLP:["f",P.lp],uSkyGlow:["f",P.skyGlow*0.25],uGlowWarm:["f",P.glowWarm],uLpAz:["f",(((P.lpAz+180)%360)-180)*RAD],uLpWarm:["f",P.lpWarm],
     uRock:["3",[((P.heading+P.rockOff+180)%360-180)*RAD,Math.atan(P.rockSize/rd),P.rockSize>0.5?Math.atan(P.rockSize*0.42/rd):0]],
@@ -71,6 +74,8 @@ function drawTile(U,ox,oy,tw,th,outFB,fragOffset,vx,vy){
   if(planetCount>0){ gl.bindVertexArray(planetVAO); gl.drawArrays(gl.POINTS,0,planetCount); gl.bindVertexArray(null); }
   gl.disable(gl.BLEND);
 
+  drawTree(U,tU);
+
   setU(progComp,U); setU(progComp,tU);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,skyTex);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,starTex);
@@ -85,7 +90,8 @@ const progEl=document.getElementById("prog");
 function progress(f){ progEl.style.width=(f*100).toFixed(1)+"%"; progEl.style.opacity=f>=1?0:1; }
 
 async function renderPreview(mode,my){
-  if(!ok) return;
+  if(!ok||!ready) return;
+  if(P.landscape==="land"&&P.treeHeight>=0.1) buildTree();
   if(starSeed!==(P.seed|0)||starReal!==!!P.realStars||starMlim<Math.min(12.2,P.maglim+0.4)) buildStars(P.seed|0,!!P.realStars);
   updatePlanets();
   const t0=performance.now();
@@ -112,7 +118,8 @@ async function renderPreview(mode,my){
 }
 
 async function renderExport(longEdge){
-  if(!ok) return;
+  if(!ok||!ready) return;
+  if(P.landscape==="land"&&P.treeHeight>=0.1) buildTree();
   const btn=document.getElementById("exportBtn"); btn.disabled=true; btn.textContent="Rendering…";
   const my=++gen;
   try{
