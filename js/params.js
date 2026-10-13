@@ -67,6 +67,13 @@ const GROUPS = [
     ["trees","Tree cover",0,1,0.01,v=>Math.round(v*100)+"%"],
     ["hills","Distant hills",0,1.5,0.01,v=>v<0.01?"none":"× "+v.toFixed(2)],
   ]},
+  {name:"Lake & mist", open:false, ctrls:[
+    ["lake","Lake",0,300,1,v=>v<1?"none":"from "+v.toFixed(0)+" m"],
+    ["ripple","Lake ripples",0,1,0.01,v=>v<0.01?"mirror calm":Math.round(v*100)+"%"],
+    ["fog","Valley mist",0,1.2,0.01,v=>v<0.01?"none":"× "+v.toFixed(2)],
+    ["fogLevel","Mist level",0,1,0.01,v=>Math.round(v*100)+"%"],
+    ["fgBright","Foreground starlight",0.5,6,0.01,v=>"× "+v.toFixed(2)],
+  ]},
   {name:"Sea & shore", open:false, ctrls:[
     ["sea","Sea state",0,2,0.01,v=>"× "+v.toFixed(2)],
     ["swellLen","Swell wavelength",4,60,0.5,v=>v.toFixed(1)+" m"],
@@ -105,6 +112,7 @@ const BASE = {
   landSeed:42, headland:0.8, trees:0.6, hills:0.5,
   landscape:"coast", relief:0.5, treeHeight:12, treeDist:42, treeOff:10, treeType:"bare",
   sea:0.6, swellLen:18, swellDir:10, silk:0.8, surf:1, beach:5.5, pebble:7, rockSize:34, rockOff:13, rockDist:300,
+  lake:0, ripple:0.25, fog:0, fogLevel:0.5, fgBright:1,
   ev:0.3, black:0.4, wb:3800, tint:0.12, sat:1.0, contrast:1.0, grain:0.5, vig:0.55,
   aspect:"5:4"
 };
@@ -155,6 +163,23 @@ Object.assign(PRESETS,{
   "Pine ridge panorama": {...PRESETS["Processed · mountain rift"], aspect:"2:1", proj:"pano", focal:13, coreAlt:19, coreOff:24, pitch:23,
     landSeed:912, treeType:"pine", treeDist:32, treeHeight:15, treeOff:-31, relief:0.75, trees:0.9,
     edgeColour:1.1, wb:4700, cloudTone:-0.25, ev:0.2, neb:0.5, skyGlow:0.5},
+  /* lake and valley mist */
+  "Mirror lake": {...PRESETS["Processed · lone tree"], aspect:"3:2", lat:44, doy:200, coreAlt:16, coreOff:-6, pitch:13, focal:14,
+    landSeed:420, relief:0.42, trees:0.85, treeHeight:0, lake:4, ripple:0.02, cloudTone:-0.4, wb:4300, lp:0.5, ev:0.15, fgBright:3.5},
+  "Misty valleys": {...PRESETS["Processed · mountain rift"], aspect:"16:9", coreAlt:18, coreOff:12, pitch:25, focal:18,
+    landSeed:640, relief:1.0, trees:0, fog:0.85, fogLevel:0.55, lp:0.6, lpWarm:0.9, lpAz:205, wb:4700, ev:0.35, fgBright:3},
+  "Alpine tarn": {...PRESETS["Processed · mountain rift"], aspect:"3:2", lat:46, doy:200, coreAlt:15, coreOff:-5, coreSide:1, pitch:12, focal:14,
+    landSeed:733, relief:0.9, trees:0.5, treeHeight:0, lake:5, ripple:0.03, fgBright:3, wb:4600, cloudTone:-0.2},
+  "Lakeshore tree": {...PRESETS["Processed · lone tree"], aspect:"4:5", lat:40, coreAlt:17, coreOff:-8, pitch:18, focal:15,
+    landSeed:515, relief:0.3, trees:0.6, treeType:"bare", treeHeight:10, treeDist:9, treeOff:16, lake:14, ripple:0.03, fgBright:3.5, cloudTone:-0.4, wb:4300},
+  "Breezy lake": {...PRESETS["Processed · lone tree"], aspect:"16:9", lat:36, coreAlt:20, coreOff:14, pitch:14, focal:13,
+    landSeed:1290, relief:0.55, trees:0.9, treeHeight:0, lake:7, ripple:0.6, fgBright:3, cloudTone:-0.25, wb:4400},
+  "Sea of clouds": {...PRESETS["Processed · mountain rift"], aspect:"16:9", coreAlt:20, coreOff:-10, pitch:22, focal:16,
+    landSeed:2203, relief:1.3, trees:0, fog:1.05, fogLevel:0.9, fgBright:3, wb:4800},
+  "Misty ridges panorama": {...PRESETS["Processed · mountain rift"], aspect:"2:1", proj:"pano", focal:13, coreAlt:19, coreOff:24, pitch:30,
+    landSeed:1460, relief:0.85, trees:0, fog:0.8, fogLevel:0.45, fgBright:3, wb:4700},
+  "Mist and lone tree": {...PRESETS["Processed · lone tree"], aspect:"3:2", lat:40, coreAlt:16, coreOff:-10, pitch:20, focal:16,
+    landSeed:880, relief:0.7, trees:0, treeType:"bare", treeHeight:12, treeDist:30, treeOff:14, fog:0.75, fogLevel:0.5, fgBright:3, cloudTone:-0.3, wb:4400},
 });
 const DEFAULT_PRESET = "Processed · lone tree";
 const DEFAULTS = Object.assign({}, BASE, PRESETS[DEFAULT_PRESET]);

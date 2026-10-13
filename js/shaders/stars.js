@@ -3,7 +3,7 @@
 const VS_STARS = COMMON + `
 in vec3 aEq; in float aMag; in vec3 aCol;
 uniform mat3 uLocalFromEq;
-uniform float uMagLim,uGain,uPsfA,uMaxPt,uDustStars;
+uniform float uMagLim,uGain,uPsfA,uMaxPt,uDustStars,uMirror;
 uniform sampler2D uSky;
 out vec3 vCol; out float vAmp; out float vSig; out float vSize;
 void main(){
@@ -14,12 +14,14 @@ void main(){
   if(!force && mg>uMagLim) return;
   vec3 d=uLocalFromEq*aEq;
   if(d.y<-0.002) return;
+  /* second pass for a lake: the star's reflection, at the mirrored position */
+  if(uMirror>0.5){ if(d.y<0.) return; d.y=-d.y; }
   vec2 gpx; float pa; if(!camProject(d,gpx,pa)) return;
   vec2 lp=gpx-uTileOrigin+uMargin;
   if(any(lessThan(lp,vec2(-80.)))||any(greaterThan(lp,uTexSize+80.))) return;
   float sig=max(uPsfA/pa,0.6);
   if(aMag>150. && aMag-200.<0.) sig=max(sig*0.5,0.5);   /* the brightest points (planets, Sirius...) get a tighter core */
-  float alt=asin(clamp(d.y,0.,1.));
+  float alt=asin(clamp(abs(d.y),0.,1.));
   vec3 ext=extinct(airmass(alt));
   float F=pow(10.,-0.4*mg);
   float tr=texelFetch(uSky,ivec2(clamp(lp,vec2(0.),uTexSize-1.)),0).a;

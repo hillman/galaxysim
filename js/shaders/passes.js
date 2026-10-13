@@ -9,7 +9,10 @@ out vec4 o;
 void main(){
   vec2 g=gl_FragCoord.xy+uTileOrigin-uMargin;
   float pixA,cz; vec3 d=camRay(g,pixA,cz);
-  if(d.y<-0.004||pixA<0.){o=vec4(0.,0.,0.,1.);return;}
+  if(pixA<0.){o=vec4(0.,0.,0.,1.);return;}
+  /* below the horizon over a lake, compute the sky for the mirrored ray, so the composite can look up reflections */
+  if(d.y<0.&&uLake.x>0.&&uLandscape==1) d.y=-d.y;
+  else if(d.y<-0.004){o=vec4(0.,0.,0.,1.);return;}
   float jit=hash2(ivec2(g)+ivec2(1<<20));
   /* unresolved stars: sparse sub-pixel points that carry part of the galaxy light */
   float gs=0.; const float P=0.2;

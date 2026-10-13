@@ -23,6 +23,7 @@ function uniforms(W,H,steps){
     uRock:["3",[((P.heading+P.rockOff+180)%360-180)*RAD,Math.atan(P.rockSize/rd),P.rockSize>0.5?Math.atan(P.rockSize*0.42/rd):0]],
     uRockN:["3",[sr()*50,sr()*50,sr()*50]], uRockBase:["f",-Math.atan(camH/rd)],
     ...landUniforms(camH),
+    ...foregroundUniforms(),
     uEnvSize:["2",[ENVW,ENVH]],
     uMagLim:["f",P.maglim],uGain:["f",P.starGain],uPsfA:["f",P.psf/60*RAD],uMaxPt:["f",maxPt],uDustStars:["f",Math.min(1,P.dust)],uStarSat:["f",P.starSat],uStarClip:["f",Math.pow(2,P.ev)*0.3*1.5*1.2],
     uCamH:["f",camH],uBeachD:["f",P.beach>0.05?P.beach:0],uSlope:["f",slope],uFwdH:["2",[Math.sin(az),Math.cos(az)]],uPebble:["f",P.pebble/100],
@@ -45,6 +46,17 @@ function landUniforms(camH){
     uLandA:["4",[side,(((tip+180)%360+360)%360-180)*RAD,P.headland>0.01?Math.atan(height/dist):0,dist]],
     uLandB:["4",[P.trees,P.hills,(P.landSeed|0)*0.731+r(),-Math.atan(camH/dist)]],
     uLandC:["3",[camH,extraStacks,stackH]], uLandExt:["f",(40+80*r())*RAD],
+  };
+}
+/* optional foreground: lake and valley fog */
+function foregroundUniforms(){
+  const land=P.landscape==="land";
+  const r=mulberry((P.landSeed|0)*15485863+29);
+  return {
+    uLake:["4",[land?P.lake:0,P.ripple,(P.landSeed|0)*0.137%50+r(),0]],
+    uFog:["4",[land?P.fog:0,P.fogLevel,(P.landSeed|0)*0.311%40+r(),0]],
+    uFgBright:["f",land?P.fgBright:1],
+    uMirror:["f",0],
   };
 }
 function bindDust(){ gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D,dustTex); gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D,dustHPTex); gl.activeTexture(gl.TEXTURE0); }
@@ -72,9 +84,23 @@ function drawTile(U,ox,oy,tw,th,outFB,fragOffset,vx,vy){
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
   gl.bindVertexArray(starVAO); gl.drawArrays(gl.POINTS,0,starCount); gl.bindVertexArray(null);
   if(planetCount>0){ gl.bindVertexArray(planetVAO); gl.drawArrays(gl.POINTS,0,planetCount); gl.bindVertexArray(null); }
+  const lake=P.landscape==="land"&&P.lake>0;
+  if(lake){
+    /* reflections in the lake: the same stars and planets at mirrored positions */
+    setU(progStars,{uMirror:["f",1]});
+    gl.bindVertexArray(starVAO); gl.drawArrays(gl.POINTS,0,starCount); gl.bindVertexArray(null);
+    if(planetCount>0){ gl.bindVertexArray(planetVAO); gl.drawArrays(gl.POINTS,0,planetCount); gl.bindVertexArray(null); }
+    setU(progStars,{uMirror:["f",0]});
+  }
   gl.disable(gl.BLEND);
 
-  drawTree(U,tU);
+  drawTree(U,tU,false);
+  if(lake){
+    /* the sky pass's alpha has served the stars; reuse it for the tree's reflection */
+    gl.bindFramebuffer(gl.FRAMEBUFFER,skyFB); gl.viewport(0,0,tex[0],tex[1]);
+    gl.colorMask(false,false,false,true); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT); gl.colorMask(true,true,true,true);
+    drawTree(U,tU,true);
+  }
 
   setU(progComp,U); setU(progComp,tU);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,skyTex);

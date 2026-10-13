@@ -120,6 +120,10 @@
     <p>The sea is a sum of directional wave trains. Each one is band-limited to the pixel footprint and averaged by the long-exposure setting, so a slow shutter smooths the surface while larger swell survives. Reflection uses Schlick's Fresnel term and a rough lookup into a mip-mapped sky panorama, which turns the Milky Way into a soft glitter path. Foam streaks, the wavy wash line and wet pebbles (a Voronoi cell field) are procedural. The headland, its trees, distant hills and sea stacks are silhouettes in angle space, generated from the coastline seed.</p>
     <p>Switch <b>Landscape</b> to <b>Land</b> for dry grassland and layered mountain ridges, with no sea or reflections. The foreground tree grows from seeded 3D branch segments with curved, tapered limbs, lateral shoots and fine twigs; leafy oak and pine add foliage geometry. Its height, distance and position follow the camera projection, so the roots sit on the ground and tiled exports keep the same silhouette. Distant ridge vegetation follows <b>Tree cover</b>. No tree sprites, scenery photographs or pre-rendered silhouette textures are used.</p>
 
+    <h3>Lake and valley mist</h3>
+    <p><b>Lake</b> adds still water on the land, from a near shore that runs across the view at the chosen distance, wandering into coves. Below the horizon the sky pass computes the sky for the mirrored ray, and the stars and the tree are drawn a second time at their mirrored positions, so the reflection keeps full-resolution stars. Resolved ripples shift each reflection lookup, unresolved ones blur it vertically, and wind patches leave some water glassy. Reflectance follows water's Fresnel curve: strong near the far shore, about 60% at 5° below the horizon, falling to about 10% at 20°, so reflections fade toward the camera as they do in real photographs. The ridges reflect too, mirrored about the true horizon.</p>
+    <p><b>Valley mist</b> lays a level sheet in front of each ridge layer. It shows through the saddles of the nearer ridges, with billowed, feathered tops, and its opacity builds gradually so ridge bases dissolve rather than being cut off. Each farther ridge is veiled a little more and lightens toward its base: the aerial perspective that gives misty ranges their depth. A thin veil lies over the open plain and thickens toward the horizon, where it meets the nearest sheet. <b>Foreground starlight</b> raises the brightness of the starlit ground and rock. Real long exposures show the land at a few percent of the sky's brightness, not pure black.</p>
+
     <h3>Camera and development</h3>
     <p>Exposure in EV, a sky black point (the background subtraction astrophotographers apply), white balance from blackbody gains with a green–magenta tint, saturation, contrast around mid-grey, cos⁴ vignetting, and shot-plus-colour noise scaled by signal. The tone curve is ACES-style, followed by sRGB encoding and dithering.</p>
 
@@ -157,6 +161,7 @@
 <script defer src="js/shaders/sky.js"></script>
 <script defer src="js/shaders/passes.js"></script>
 <script defer src="js/shaders/stars.js"></script>
+<script defer src="js/shaders/foreground.js"></script>
 <script defer src="js/shaders/composite.js"></script>
 <script defer src="js/astronomy.js"></script>
 <script defer src="js/colour.js"></script>

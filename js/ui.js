@@ -106,7 +106,7 @@ function syncUI(){
   document.querySelectorAll("[data-side]").forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.side===P.coreSide)));
   document.querySelectorAll("[data-choice]").forEach(button=>button.setAttribute("aria-pressed",String(P[button.dataset.field]===button.dataset.choice)));
   document.querySelectorAll('[data-land-only="true"]').forEach(row=>row.hidden=P.landscape!=="land");
-  ["relief","treeHeight","treeDist","treeOff"].forEach(id=>inputs[id].inp.parentElement.hidden=P.landscape!=="land");
+  ["relief","treeHeight","treeDist","treeOff","lake","ripple","fog","fogLevel","fgBright"].forEach(id=>inputs[id].inp.parentElement.hidden=P.landscape!=="land");
   ["headland","hills","sea","swellLen","swellDir","silk","surf","beach","pebble","rockSize","rockOff","rockDist"].forEach(id=>inputs[id].inp.parentElement.hidden=P.landscape==="land");
   ["time","heading"].forEach(id=>inputs[id]&&inputs[id].inp.parentElement.classList.toggle("derived",!!P.aimCore));
   ["coreAlt","coreOff"].forEach(id=>inputs[id]&&inputs[id].inp.parentElement.classList.toggle("derived",!P.aimCore));

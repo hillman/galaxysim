@@ -27,7 +27,7 @@ The scripts are plain (non-module) scripts loaded in order by `index.html`, so t
 | `css/style.css` | All styling |
 | `js/params.js` | Controls, presets, saved settings, formatters |
 | `js/gl.js` | WebGL2 context, shader compilation, textures and framebuffers |
-| `js/shaders/` | GLSL sources: `common`, `sky`, `passes` (sky/environment), `stars`, `composite` (sea, land, camera) |
+| `js/shaders/` | GLSL sources: `common`, `sky`, `passes` (sky/environment), `stars`, `foreground` (lake, valley mist), `composite` (sea, land, camera) |
 | `js/astronomy.js` | Sidereal time, observer frame, aiming at the galactic centre |
 | `js/colour.js` | Black-body colours and white balance |
 | `js/stars.js` | Synthetic star field plus catalogue stars and clusters |
@@ -54,6 +54,7 @@ The dust map stays a base64 data URI rather than a `.png` file because the page 
 - **Processed · lone tree**: a portrait with a cyan star-cloud palette, warm horizon, dry grassland and a branching bare tree.
 - **Processed · mountain rift**: a wide diagonal band with peach/lavender cloud edges, layered mountain silhouettes and a deeper irregular rift.
 - **Processed · blue coast**, **Oak meadow** and **Pine ridge panorama** explore the same renderer with a calm coast, a leafy foreground and a wide forested landscape.
+- **Mirror lake**, **Alpine tarn**, **Lakeshore tree** and **Breezy lake**, and **Misty valleys**, **Sea of clouds**, **Misty ridges panorama** and **Mist and lone tree** use the optional **Lake & mist** controls (land only): still water with mirrored stars, sky and ridges; level mist sheets between ridge layers with aerial perspective; and a foreground starlight level. All of them default to off, so other presets and saved scenes are unchanged.
 - **Landscape → Land** switches any preset to dry terrain. Adjust mountain height, tree height/distance/position, species (bare tree, leafy oak or pine) and the landscape seed. Set foreground tree height to zero for an unobstructed landscape. Tree cover controls distant ridge vegetation independently.
 - **Fine dust structure**, **Rift edge colour** and **Cloud palette** are independent controls, also available over the sea. The original presets keep all three at zero and retain their original coastal rendering. Old settings JSON loads with these defaults.
 

@@ -64,6 +64,7 @@ vec3 extinct(float X){ return exp(-X*uHaze*vec3(0.105,0.16,0.27)); }
 uniform vec3 uRock; uniform vec3 uRockN; uniform float uRockBase;
 uniform vec4 uLandA,uLandB; uniform vec3 uLandC; uniform float uLandExt;
 uniform int uLandscape;
+uniform vec4 uLake;
 uniform float uRelief;
 float terrainRidge(float azimuth,float layer,float pixelAngle){
   vec2 circle=vec2(cos(azimuth),sin(azimuth));

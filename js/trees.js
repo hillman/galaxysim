@@ -85,13 +85,14 @@ function buildTree(){
 const VS_TREES=COMMON+`
 in vec3 aStart,aEnd,aShape;
 uniform vec3 uTree;
-uniform float uCamH;
+uniform float uCamH,uTreeMirror;
 out float vEdge,vWidth;
 vec3 treePoint(vec3 point){
   vec2 forward=vec2(sin(uTree.x),cos(uTree.x));
   vec2 right=vec2(forward.y,-forward.x);
   vec2 horizontal=forward*(uTree.y+point.z*uTree.z)+right*point.x*uTree.z;
-  return vec3(horizontal.x,point.y*uTree.z-uCamH,horizontal.y);
+  /* the mirror pass draws the tree's reflection in a lake, flipped about the water surface */
+  return vec3(horizontal.x,(uTreeMirror>0.5?-point.y:point.y)*uTree.z-uCamH,horizontal.y);
 }
 void main(){
   gl_Position=vec4(-10.,-10.,0.,1.); vEdge=0.; vWidth=1.;
@@ -117,9 +118,9 @@ void main(){
 }
 `;
 
-function drawTree(uniformValues,tileUniforms){
+function drawTree(uniformValues,tileUniforms,mirror){
   if(P.landscape!=="land"||P.treeHeight<0.1) return;
-  setU(progTrees,uniformValues); setU(progTrees,tileUniforms);
+  setU(progTrees,uniformValues); setU(progTrees,tileUniforms); setU(progTrees,{uTreeMirror:["f",mirror?1:0]});
   gl.colorMask(false,false,false,true);
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
   gl.bindVertexArray(treeVAO); gl.drawArrays(gl.TRIANGLES,0,treeCount); gl.bindVertexArray(null);

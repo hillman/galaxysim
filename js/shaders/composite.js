@@ -95,7 +95,9 @@ vec3 pebbles(vec2 q,float fp,vec3 d,float wet,vec3 skyAvg){
 }
 float gauss(ivec2 p,int s){ return (hash2(p+ivec2(s,0))+hash2(p+ivec2(0,s))+hash2(p+ivec2(s,s))+hash2(p-ivec2(s,0))-2.)*1.73; }
 vec3 aces(vec3 x){ return clamp(x*(2.51*x+0.03)/(x*(2.43*x+0.59)+0.14),0.,1.); }
-vec3 dryLandscape(vec3 direction,float azimuth,float altitude,float pixelAngle,vec3 sky,vec3 skyAverage,vec3 horizon,out float groundCoverage){
+`+FOREGROUND+`
+/* ridges and valley fog sheets: everything beyond the near ground, also used for the lake's reflection */
+vec3 landBackdrop(float azimuth,float altitude,float pixelAngle,vec3 sky,vec3 skyAverage,vec3 horizon,out float groundCoverage){
   vec3 colour=sky;
   groundCoverage=0.;
   for(int layer=0;layer<3;layer++){
@@ -105,11 +107,39 @@ vec3 dryLandscape(vec3 direction,float azimuth,float altitude,float pixelAngle,v
     groundCoverage=max(groundCoverage,coverage);
     vec2 mountain=vec2(azimuth,altitude)*vec2(190.,260.);
     float crag=fbm2f(mountain+depth*43.+uLandB.z,pixelAngle*260.);
-    vec3 rock=skyAverage*vec3(0.045,0.052,0.065)*(0.45+crag);
+    vec3 rock=skyAverage*vec3(0.045,0.052,0.065)*(0.45+crag)*mix(1.,uFgBright,0.5-0.15*depth);
     float ravine=fbm2f(vec2(azimuth*380.,altitude*40.)+crag*2.+depth*43.+uLandB.z,pixelAngle*380.);
-    rock*=0.7+ravine*0.6;
+    /* gullies run downhill; under a mist veil they would read as vertical streaks, so they fade with the veil */
+    rock*=1.+(ravine*0.6-0.3)*(uFog.x>0.?max(1.-uFog.x*2.,0.):1.);
     rock+=horizon*0.035*(1.-depth*0.3);
+    vec3 fogC=fogColour(azimuth,altitude,skyAverage,horizon);
+    if(uFog.x>0.) rock=mix(rock,fogC*0.8,fogVeil(layer)+ridgeHaze(layer,azimuth,altitude));
     colour=mix(colour,rock,coverage);
+    if(uFog.x>0.) colour=mix(colour,fogC,fogOpacity(layer,azimuth,altitude,pixelAngle));
+  }
+  return colour;
+}
+/* what the misty foot of the nearest ridge looks like on average: built only from smooth terms, so the plain can fade
+   into it without copying any column detail */
+vec3 mistHorizon(float azimuth,float altitude,vec3 skyAverage,vec3 horizon){
+  vec3 fogC=fogColour(azimuth,altitude,skyAverage,horizon);
+  vec3 foot=skyAverage*vec3(0.045,0.052,0.065)*mix(1.,uFgBright,0.2);
+  foot=mix(foot,fogC*0.8,fogVeil(2)+uFog.x*0.2);
+  return mix(foot,fogC,fogBase(2,azimuth,0.002));
+}
+/* mist lying out on the plain: looking down through a shallow layer, the plain fades toward the misty horizon */
+vec3 groundFog(vec3 colour,float azimuth,float dist,float pa,vec3 skyAverage,vec3 horizon){
+  if(uFog.x<=0.) return colour;
+  float alt=-atan(uCamH/max(dist,0.1));
+  return mix(colour,mistHorizon(azimuth,alt,skyAverage,horizon),groundFogOpacity(azimuth,alt,dist,pa));
+}
+vec3 dryLandscape(vec3 direction,float azimuth,float altitude,float pixelAngle,vec3 sky,vec3 skyAverage,vec3 horizon,out float groundCoverage){
+  vec3 colour=landBackdrop(azimuth,altitude,pixelAngle,sky,skyAverage,horizon,groundCoverage);
+  /* just above the horizon the ridge foot converges on the same misty average the plain fades to */
+  if(uFog.x>0.&&altitude>=0.){
+    colour=mix(colour,mistHorizon(azimuth,altitude,skyAverage,horizon),(1.-smoothstep(0.,0.006,altitude))*0.9);
+    /* mist near the horizon is foreground for the sky black point, easing out above it, so there is no step at the horizon */
+    groundCoverage=max(groundCoverage,1.-smoothstep(0.,0.02,altitude));
   }
   if(altitude<0.){
     groundCoverage=1.;
@@ -118,10 +148,69 @@ vec3 dryLandscape(vec3 direction,float azimuth,float altitude,float pixelAngle,v
     float footprint=distance*pixelAngle/max(-direction.y,0.04);
     float grass=fbm2f(ground*vec2(1.4,0.6)+uLandB.z,footprint*1.4);
     float patches=fbm2f(ground*0.035+uLandB.z,footprint*0.035);
-    vec3 soil=skyAverage*vec3(0.038,0.05,0.025)*(0.3+grass*0.7+patches*0.8);
-    colour=mix(soil,colour,smoothstep(-0.09,0.,altitude));
+    float stones=fbm2f(ground*7.+uLandB.z+9.,footprint*7.);
+    vec3 tint=mix(vec3(0.038,0.05,0.025),vec3(0.046,0.043,0.034),smoothstep(1.,3.,uFgBright));
+    vec3 soil=skyAverage*tint*(0.3+grass*0.7+patches*0.8)*mix(1.,0.75+0.5*stones,smoothstep(1.,3.,uFgBright))*uFgBright;
+    soil=groundFog(soil,azimuth,distance,pixelAngle,skyAverage,horizon);
+    /* ridge bases fade into the ground; with fog the sheets must not bleed onto the near ground, so keep that edge tight */
+    colour=uFog.x>0.?soil:mix(soil,colour,smoothstep(-0.09,0.,altitude));
   }
   return colour;
+}
+/* the lake: the mirrored sky comes from the sky and star passes (computed for the reflected ray below the horizon);
+   resolved ripples shift the lookup, unresolved ones blur it vertically, as long-exposure reflections do */
+vec3 lakeWater(vec3 d,vec2 gp,float azm,float alt,float pa,vec3 skyAvg,vec3 horizon,out float F,out float skyShare){
+  float t=uCamH/max(-d.y,1e-5);
+  vec2 p=d.xz*t;
+  vec2 rad=normalize(d.xz+1e-7), lat=vec2(-rad.y,rad.x);
+  float fpL=t*pa, fpR=t*pa/max(-d.y,1e-4);
+  float patchy=smoothstep(0.3,0.8,fbm2f(p*0.012+uLake.z,fpR*0.012));
+  /* light airs leave glassy patches between ruffled ones; a stronger breeze ruffles everything */
+  float amp=uLake.y*mix(0.03+0.97*patchy*patchy,1.,smoothstep(0.2,0.8,uLake.y));
+  vec2 g=vec2(0.); float var=1e-8;
+  for(int i=0;i<9;i++){
+    float fi=float(i);
+    float lam=3.*pow(0.62,fi), k=2.*PI/lam;
+    /* wind ripples: short wavelets in a broad spread of directions; long trains kept weak so no regular bands form */
+    float ang=uLake.z*3.+(hashf(fi+uLake.z)-0.5)*3.6;
+    vec2 dir=vec2(sin(ang),cos(ang));
+    float S=amp*0.03*pow(0.85,fi)*(i<3?0.35:1.);
+    float fpD=length(vec2(dot(dir,rad)*fpR,dot(dir,lat)*fpL));
+    float filt=exp(-0.5*pow(k*fpD*0.6,2.));
+    float ph=k*dot(dir,p)+6.2832*hashf(fi*3.1+uLake.z);
+    g+=dir*S*cos(ph)*filt;
+    var+=0.5*S*S*(1.-filt*filt);
+  }
+  float sR=dot(g,rad), sL=dot(g,lat);
+  float sig=2.*sqrt(var);
+  float altR=max(-alt+2.*sR,0.0003), azR=azm+2.*sL*(-d.y);
+  F=0.02+0.98*pow(1.-clamp(-d.y,0.,1.),5.);
+  vec3 lookDir=vec3(sin(azR)*cos(altR),-sin(altR),cos(azR)*cos(altR));
+  vec2 q; float pq;
+  vec4 m=vec4(0.);
+  float sigPx=sig/pa;
+  if(camProject(lookDir,q,pq)){
+    vec2 c=q-uTileOrigin+uMargin;
+    float ws=0.;
+    for(int k=-3;k<=3;k++){
+      float o=float(k)*max(sigPx,0.3)*0.7;
+      float w=exp(-0.5*pow(float(k)*0.7,2.));
+      vec2 tq=clamp(c+vec2(0.,o),vec2(0.),uTexSize-1.);
+      vec4 sk=texelFetch(uSky,ivec2(tq),0);
+      m+=w*vec4(sk.rgb+texelFetch(uStars,ivec2(tq),0).rgb,sk.a); ws+=w;
+    }
+    m/=ws;
+  }
+  vec3 rdir=vec3(sin(azR)*cos(altR),sin(altR),cos(azR)*cos(altR));
+  vec3 rough=envRough(rdir,sig+pa,sig*max(-d.y,0.02)+pa);
+  m.rgb=mix(m.rgb,rough,smoothstep(18.,45.,sigPx));
+  float cover;
+  vec3 refl=landBackdrop(azR,altR,sqrt(pa*pa+sig*sig),m.rgb,skyAvg,horizon,cover);
+  refl=mix(refl,skyAvg*vec3(0.009,0.007,0.005),m.a);
+  skyShare=F*(1.-max(cover,m.a));
+  vec3 body=skyAvg*vec3(0.006,0.008,0.007)*uFgBright;
+  vec3 col=F*refl+(1.-F)*body;
+  return groundFog(col,azm,t,pa,skyAvg,horizon);
 }
 void main(){
   vec2 gp=gl_FragCoord.xy+uFragOffset;
@@ -152,9 +241,23 @@ void main(){
   bool rockPix=rt>0. && alt<uRockBase+rt && tSurf>rockDist;
   if(uLandscape==1){
     float groundCoverage;
-    col=dryLandscape(d,azm,alt,pa,sky,skyAvg,horizon,groundCoverage);
+    bool lakeOn=uLake.x>0.&&d.y<0.;
+    col=dryLandscape(d,azm,alt,pa,lakeOn?vec3(0.):sky,skyAvg,horizon,groundCoverage);
+    if(lakeOn){
+      float u, shore=lakeShoreAt(azm,u);
+      float shoreAlt=-atan(uCamH/shore);
+      float lc=clamp((alt-shoreAlt)/pa+0.5,0.,1.);
+      /* a damp band just on the shore side of the waterline, darker soil that mirrors some sky */
+      float wetBand=clamp((alt-(-atan(uCamH/max(shore-0.12,0.3))))/pa,0.,1.)*(1.-lc)*(0.5+vnoise2(vec2(u*3.,uLake.z)));
+      col=mix(col,col*0.85+horizon*0.012*uFgBright,clamp(wetBand,0.,1.));
+      if(lc>0.){
+        float F,skyShare; vec3 w=lakeWater(d,gp,azm,alt,pa,skyAvg,horizon,F,skyShare);
+        /* the sky black point applies only to reflected sky, not to reflected ridges or trees */
+        col=mix(col,w,lc); groundCoverage=mix(groundCoverage,1.-skyShare,lc);
+      }
+    }
     float treeCoverage=texelFetch(uStars,tp,0).a;
-    col=mix(col,skyAvg*vec3(0.009,0.007,0.005),treeCoverage);
+    col=mix(col,skyAvg*vec3(0.009,0.007,0.005)*uFgBright,treeCoverage);
     blackWeight=1.-max(groundCoverage,treeCoverage);
   } else if(landPix){
     float edge=(lt-alt)/pa;
